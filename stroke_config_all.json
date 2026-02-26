@@ -1,0 +1,79 @@
+{
+  "datasets": [
+    {
+      "name": "ATLAS",
+      "data_dir": "/hpc/pahm409/harvard/atlas_full_training_data",
+      "image_pattern": "*_space-MNI152NLin2009aSym_T1w.nii.gz",
+      "mask_pattern": "*_space-MNI152NLin2009aSym_label-L_desc-T1lesion_mask.nii.gz",
+      "description": "ATLAS 2.0 - Chronic stroke, already in MNI space, small lesions",
+      "modality": "T1w",
+      "notes": "Already preprocessed and in MNI152 space - skip registration!",
+      "n_images": 655,
+      "n_masks": 655,
+      "sample_image": "/hpc/pahm409/harvard/atlas_full_training_data/sub-r001s001_ses-1_space-MNI152NLin2009aSym_T1w.nii.gz",
+      "sample_mask": "/hpc/pahm409/harvard/atlas_full_training_data/sub-r001s001_ses-1_space-MNI152NLin2009aSym_label-L_desc-T1lesion_mask.nii.gz"
+    },
+    {
+      "name": "UOA_Private",
+      "data_dir": "/hpc/pahm409/harvard/UOA/FNIRT/train",
+      "image_pattern": "*_T1_FNIRT_MNI.nii.gz",
+      "mask_pattern": "*_LESION_FNIRT_MNI_bin.nii.gz",
+      "description": "UOA private - Already in MNI via FNIRT, large lesions",
+      "modality": "T1w",
+      "notes": "Already preprocessed and in MNI space - skip registration!",
+      "n_images": 177,
+      "n_masks": 177,
+      "sample_image": "/hpc/pahm409/harvard/UOA/FNIRT/train/A207_T1_FNIRT_MNI.nii.gz",
+      "sample_mask": "/hpc/pahm409/harvard/UOA/FNIRT/train/A207_LESION_FNIRT_MNI_bin.nii.gz"
+    },
+    {
+      "name": "ISLES2018",
+      "data_dir": "/hpc/pahm409/ISLES/ISLES2018_Training/TRAINING",
+      "image_pattern": "case_*/SMIR.*.CT_MTT.*/SMIR.*.CT_MTT.*.nii",
+      "mask_pattern": "case_*/SMIR.*.OT.*/SMIR.*.OT.*.nii",
+      "description": "ISLES 2018 - Acute stroke, CT perfusion (MTT modality)",
+      "modality": "MTT",
+      "notes": "Using MTT (Mean Transit Time), EXCLUDING 4DPWI. Other available: CT, CBF, CBV, Tmax",
+      "n_images": 94,
+      "n_masks": 94,
+      "sample_image": "/hpc/pahm409/ISLES/ISLES2018_Training/TRAINING/case_1/SMIR.Brain.XX.O.CT_MTT.345565/SMIR.Brain.XX.O.CT_MTT.345565.nii",
+      "sample_mask": "/hpc/pahm409/ISLES/ISLES2018_Training/TRAINING/case_1/SMIR.Brain.XX.O.OT.345566/SMIR.Brain.XX.O.OT.345566.nii"
+    },
+    {
+      "name": "ISLES2022",
+      "data_dir": "/hpc/pahm409/ISLES/ISLES2022",
+      "image_pattern": "sub-*/sub-*_ses-0001_dwi.nii.gz",
+      "mask_pattern": "sub-*/sub-*_ses-0001_msk.nii.gz",
+      "description": "ISLES 2022 - Acute stroke, DWI sequence",
+      "modality": "DWI",
+      "notes": "Multi-modal available: DWI, ADC, FLAIR",
+      "n_images": 250,
+      "n_masks": 250,
+      "sample_image": "/hpc/pahm409/ISLES/ISLES2022/sub-strokecase0001/sub-strokecase0001_ses-0001_dwi.nii.gz",
+      "sample_mask": "/hpc/pahm409/ISLES/ISLES2022/sub-strokecase0001/sub-strokecase0001_ses-0001_msk.nii.gz"
+    }
+  ],
+  "preprocessing": {
+    "target_spacing": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "normalization_method": "zscore",
+    "clip_percentile": 99.5,
+    "use_skull_strip": false,
+    "skip_registration": true,
+    "use_gpu": true,
+    "save_intermediate": false
+  },
+  "output_base_dir": "/home/pahm409/preprocessed_stroke_foundation",
+  "num_workers": 8,
+  "notes": [
+    "ATLAS and UOA are already in MNI space - registration skipped",
+    "ISLES2018 uses MTT (Mean Transit Time) - 4DPWI EXCLUDED",
+    "ISLES2022 uses DWI - different from structural MRI",
+    "GPU acceleration enabled for faster preprocessing",
+    "For T1-only foundation model: use ATLAS and UOA",
+    "For multi-modal model: include all datasets"
+  ]
+}

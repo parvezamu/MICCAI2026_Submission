@@ -57,3 +57,5 @@ weights/
 *.pth
 ATLAS_check/
 simclr_output/
+__pycache__/
+*.pyc
