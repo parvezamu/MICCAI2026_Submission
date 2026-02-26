@@ -52,3 +52,8 @@ wandb/
 logs/
 checkpoints/
 weights/
+# checkpoints / weights
+*.pt
+*.pth
+ATLAS_check/
+simclr_output/
