@@ -1,0 +1,55 @@
+data:
+  adaptive_patching: true
+  augmentation:
+    gaussian_blur: 0.5
+    gaussian_noise: 0.01
+    random_crop: true
+    random_flip: true
+    random_gamma:
+    - 0.8
+    - 1.2
+    random_intensity: 0.1
+    random_rotation: 15
+    random_scale:
+    - 0.9
+    - 1.1
+  datasets:
+  - BraTS2020
+  min_depth: 64
+  num_workers: 0
+  patch_size:
+  - 128
+  - 128
+  - 128
+  pin_memory: true
+  preprocessed_dir: /hpc/ajhz839/data/BraTS2020/preprocessed_brats2020_foundation/
+  splits_file: splits_stratified.json
+  use_full_volume: true
+experiment:
+  name: bts_foundation_simclr_t1only
+  output_dir: /hpc/ajhz839/simclr_output
+  seed: 42
+logging:
+  log_every: 10
+  save_images: true
+  save_images_every: 50
+  use_wandb: false
+model:
+  architecture: resnet3d
+  depth: 18
+  hidden_dim: 512
+  projection_dim: 128
+training:
+  batch_size: 8
+  epochs: 200
+  gpu_id: 0
+  keep_top_k: 3
+  learning_rate: 0.0003
+  mixed_precision: true
+  optimizer: adam
+  save_every: 10
+  scheduler: cosine
+  temperature: 0.5
+  use_gpu: true
+  warmup_epochs: 10
+  weight_decay: 0.0001

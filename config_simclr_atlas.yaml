@@ -1,0 +1,49 @@
+experiment:
+  name: 'atlas_simclr_t1_strokes'
+  output_dir: '/home/pahm409/simclr_output'
+  seed: 42
+
+model:
+  architecture: 'resnet3d'
+  depth: 18
+  projection_dim: 128
+  hidden_dim: 512
+
+training:
+  gpu_id: 2
+  use_gpu: true
+  mixed_precision: true
+  epochs: 200
+  batch_size: 8
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  warmup_epochs: 10
+  temperature: 0.5
+  optimizer: 'adam'
+  scheduler: 'cosine'
+  save_every: 10
+  keep_top_k: 3
+
+data:
+  preprocessed_dir: '/home/pahm409/preprocessed_atlas_for_isles'
+  splits_file: '/home/pahm409/preprocessed_atlas_for_isles/atlas_splits_simclr.json'
+  datasets: ['ATLAS_resampled']
+  num_workers: 4
+  pin_memory: true
+  patch_size: [96, 96, 96]
+  min_depth: 64
+  augmentation:
+    random_crop: true
+    random_flip: true
+    random_rotation: 15
+    random_scale: [0.9, 1.1]
+    random_intensity: 0.1
+    random_gamma: [0.8, 1.2]
+    gaussian_noise: 0.01
+    gaussian_blur: 0.5
+
+logging:
+  use_wandb: false
+  log_every: 10
+  save_images: true
+  save_images_every: 50
