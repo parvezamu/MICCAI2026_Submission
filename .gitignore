@@ -1,0 +1,18 @@
+
+# data / models / outputs
+*.npz
+*.npy
+*.nii
+*.nii.gz
+*.pth
+*.pt
+*.ckpt
+*.pkl
+*.zip
+*.tar
+*.tar.gz
+runs/
+wandb/
+logs/
+checkpoints/
+weights/
