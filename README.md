@@ -269,6 +269,362 @@ Output per case: `<case_id>.npz` (keys: `patches`, `masks`, `centers`, `original
 
 ---
 
+## Model Training
+
+### ResNet-18 U-Net (96³ patches)
+
+#### Step 1 — BraTS 2024 Pretraining
+
+**`train_brats_t2flair_supervised_FIXED.py` — ResNet-18 pretraining on BraTS 2024**
+
+Trains a ResNet-18 U-Net on BraTS 2024 T2-FLAIR tumour segmentation using 96³ random patches. Produces pretrained encoder checkpoints used to initialise the transfer learning stroke fine-tuning experiments.
+
+```bash
+python train_brats_t2flair_supervised_FIXED.py \
+  --brats-dir /path/to/preprocessed_brats2024_t2flair \
+  --splits-file brats2024_t2flair_splits_5fold.json \
+  --output-dir /path/to/brats_t2flair_supervised \
+  --fold 0 --epochs 100 --batch-size 8
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--brats-dir` | — | Path to preprocessed BraTS `.npz` files |
+| `--splits-file` | — | Path to `brats2024_t2flair_splits_5fold.json` |
+| `--output-dir` | — | Output directory for checkpoints |
+| `--fold` | `0` | Fold number (0–4) |
+| `--epochs` | `100` | Number of training epochs |
+| `--batch-size` | `8` | Batch size |
+| `--lr` | `1e-4` | Learning rate |
+
+---
+
+#### Step 2 — ISLES 2022 Fine-tuning (4 strategies)
+
+Four independent training scripts cover the ISLES 2022 ablation strategies. Two are shared here; the remaining two (scratch variants) follow the same interface.
+
+---
+
+**`joint_training_MINIMAL_FIX.py` — Separate encoders, transfer learning (Exp 1)**
+
+Individual DWI and ADC U-Nets with separate ResNet-18 encoders. The DWI encoder is initialised from the BraTS pretrained checkpoint; the ADC encoder is randomly initialised. Both are trained jointly with `L = L_DWI + L_ADC`. Validation and inference use the DWI branch only. Includes spatially consistent augmentations (rotation, elastic deformation, scaling, flipping) plus independent intensity augmentations per modality.
+
+```bash
+python joint_training_MINIMAL_FIX.py \
+  --brats-checkpoint /path/to/brats_t2flair_supervised/fold_0/best_model.pth \
+  --isles-dir /path/to/preprocessed_isles_dual_v2 \
+  --splits-file isles_dual_splits_5fold.json \
+  --output-dir /path/to/joint_training_minimal_fix \
+  --fold 0
+```
+
+| Argument | Description |
+|---|---|
+| `--brats-checkpoint` | Path to BraTS pretrained checkpoint (required) |
+| `--isles-dir` | Path to preprocessed ISLES 2022 `.npz` files |
+| `--splits-file` | Path to ISLES 2022 5-fold splits JSON |
+| `--output-dir` | Output directory for checkpoints and training log |
+| `--fold` | Fold number (0–4) |
+
+Fixed settings: 200 epochs, batch size 8, 96³ patches, DWI LR=1e-4 (pretrained), ADC LR=1e-3 (scratch), PolyLR scheduler (power=0.9), soft Dice loss.
+
+---
+
+**`joint_training_SEPARATE_LR.py` — Shared encoder (2-channel), transfer learning (Exp 2)**
+
+DWI and ADC are concatenated as a 2-channel input and processed by a single shared ResNet-18 encoder initialised from BraTS pretrained weights (conv1 weights duplicated and scaled by 0.5 for 2-channel adaptation). Two separate decoders produce DWI and ADC segmentation outputs. Validation averages both decoder outputs. Encoder and decoder learning rates are set independently.
+
+```bash
+python joint_training_SEPARATE_LR.py \
+  --brats-checkpoint /path/to/brats_t2flair_supervised/fold_0/best_model.pth \
+  --isles-dir /path/to/preprocessed_isles_dual_v2 \
+  --splits-file isles_dual_splits_5fold.json \
+  --output-dir /path/to/joint_training_dualchannel \
+  --fold 0
+```
+
+| Argument | Description |
+|---|---|
+| `--brats-checkpoint` | Path to BraTS pretrained checkpoint (required) |
+| `--isles-dir` | Path to preprocessed ISLES 2022 `.npz` files |
+| `--splits-file` | Path to ISLES 2022 5-fold splits JSON |
+| `--output-dir` | Output directory for checkpoints and training log |
+| `--fold` | Fold number (0–4) |
+
+Fixed settings: 200 epochs, batch size 8, 96³ patches, encoder LR=1e-4, decoder LR=1e-3, PolyLR scheduler (power=0.9), soft Dice loss.
+
+---
+
+**`joint_training_from_scratch.py` — Separate encoders, scratch (Exp 3)**
+
+Identical architecture and hyperparameters to Exp 1 but both DWI and ADC encoders randomly initialised. No BraTS checkpoint required.
+
+```bash
+for i in 0 1 2 3 4; do
+  python joint_training_from_scratch.py --fold $i
+done
+```
+
+---
+
+**`channelwise_from_scratch.py` — Shared encoder (2-channel), scratch (Exp 4)**
+
+Identical architecture and hyperparameters to Exp 2 but shared encoder randomly initialised. No BraTS checkpoint required.
+
+```bash
+for i in 0 1 2 3 4; do
+  python channelwise_from_scratch.py --fold $i
+done
+```
+
+---
+
+### ATLAS 2.0 and UOA Private (ResNet-18)
+
+**`train_all_experiments_with_volume_validation.py` — All 20 ATLAS/UOA experiments**
+
+Runs all 20 experiments (2 datasets × 2 conditions × 5 folds) sequentially. Both transfer and scratch conditions are handled by a single `use_transfer` flag per experiment entry — if a BraTS checkpoint is found for the fold it loads encoder weights; otherwise it falls back to random initialisation gracefully. Training uses lesion-focused patch sampling (70% lesion-centred, 30% random).
+
+Validation runs at two levels: patch-level DSC every epoch, and volume-level sliding window DSC at epoch 1 and every 10 epochs thereafter. NIfTI predictions are saved at epoch 1 (up to 5 cases) for visual inspection.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python train_all_experiments_with_volume_validation.py
+```
+
+All paths are set at the top of the script:
+
+| Variable | Description |
+|---|---|
+| `BRATS_BASE_DIR` | Root of BraTS pretrained checkpoints (`fold_X/best_model.pth`) |
+| `PREPROCESSED_DIR` | Root of `preprocessed_stroke_foundation` outputs (Step 1) |
+| `SPLITS_FILE` | Path to `splits_5fold.json` |
+| `OUTPUT_DIR` | Output root for all checkpoints and logs |
+| `EPOCHS` | Epochs per experiment (default: 100) |
+| `BATCH_SIZE` | Batch size (default: 8) |
+
+Fixed settings: 100 epochs, batch size 8, 96³ patches, LR=1e-4 (Adam), soft Dice loss. Uses `PatchDatasetWithCenters` for lesion-focused sampling.
+
+Outputs per fold: `<dataset>/<transfer|scratch>/fold_X/best_model.pth`, `log.csv`, `volume_validation_epoch1/` (NIfTI), `summary_progress.json` (updated after each fold), `summary_final.json`.
+
+---
+
+### UCTransNet3D (64³ patches) — ATLAS and UOA Fine-tuning
+
+**`finetune_uctransnet3d_stroke.py` — All 20 UCTransNet3D ATLAS/UOA experiments**
+
+Fine-tunes UCTransNet3D on ATLAS and UOA across all combinations of dataset, condition (transfer/scratch), and fold. The `--run-all` flag iterates through all 20 experiments (2 datasets × 2 conditions × 5 folds) automatically. Transfer experiments initialise the encoder from the corresponding BraTS pretrained UCTransNet3D checkpoint (`fold_X/best_model.pth`); scratch experiments use random initialisation. Uses 64³ patches throughout for consistency with BraTS pretraining.
+
+```bash
+python finetune_uctransnet3d_stroke.py --run-all
+```
+
+All paths and hyperparameters are configured inside the script. Outputs the same structure as the ResNet-18 ATLAS/UOA experiments: `<dataset>/<transfer|scratch>/fold_X/best_model.pth`, `log.csv`, and per-fold progress JSON.
+
+---
+
+## Evaluation
+
+### ISLES 2022 (ResNet-18)
+
+All evaluation scripts use sliding window inference (50% overlap) over the 96³ preprocessed volume, then reverse the preprocessing (bbox unpadding + zoom) to restore predictions to native NIfTI space before computing DSC against the original ground truth masks.
+
+> ⚠️ Evaluation requires `preprocess_isles_WITH_BBOX.py` outputs (not the training `.npz` files), as the bbox metadata is needed for spatial reconstruction.
+
+---
+
+**`evaluate_joint_sliding_window_DEBUG.py` — Separate encoders (Exp 1 & 3)**
+
+Evaluates the separate-encoder model (`joint_training_MINIMAL_FIX.py`). Runs sliding window inference on DWI only, reconstructs predictions to original space using saved bbox metadata, and computes DSC in native NIfTI space. Also reports intermediate DSC in 96³ space for debugging.
+
+```bash
+python evaluate_joint_sliding_window_DEBUG.py \
+  --checkpoint /path/to/joint_training_minimal_fix/fold_0/best_joint_model.pth \
+  --isles-dir /path/to/preprocessed_isles_dual_WITH_BBOX \
+  --isles-raw-dir /path/to/ISLES2022 \
+  --splits-file isles_dual_splits_5fold.json \
+  --output-dir /path/to/test_results \
+  --step-size 0.5
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--checkpoint` | — | Path to trained model checkpoint (required) |
+| `--isles-dir` | — | Path to `preprocessed_isles_dual_WITH_BBOX` `.npz` files |
+| `--isles-raw-dir` | — | Path to raw ISLES 2022 NIfTI files (for ground truth) |
+| `--splits-file` | — | Path to ISLES 2022 5-fold splits JSON |
+| `--output-dir` | — | Output directory for `test_results.json` |
+| `--step-size` | `0.5` | Sliding window step size (0.5 = 50% overlap) |
+| `--save-nifti` | flag | Save prediction and ground truth NIfTI files |
+
+---
+
+**`evaluate_channelwise_sliding_window.py` — Shared encoder, 2-channel (Exp 2 & 4)**
+
+Evaluates the shared-encoder dual-channel model (`joint_training_SEPARATE_LR.py`). Takes concatenated DWI+ADC as input, runs sliding window inference, and reports DSC separately for the DWI decoder, ADC decoder, and averaged output. Final reported DSC uses the averaged prediction.
+
+```bash
+python evaluate_channelwise_sliding_window.py \
+  --checkpoint /path/to/joint_training_dualchannel/fold_0/best_joint_model.pth \
+  --isles-dir /path/to/preprocessed_isles_dual_WITH_BBOX \
+  --isles-raw-dir /path/to/ISLES2022 \
+  --splits-file isles_dual_splits_5fold.json \
+  --output-dir /path/to/channelwise_test_results \
+  --step-size 0.5
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--checkpoint` | — | Path to trained model checkpoint (required) |
+| `--isles-dir` | — | Path to `preprocessed_isles_dual_WITH_BBOX` `.npz` files |
+| `--isles-raw-dir` | — | Path to raw ISLES 2022 NIfTI files |
+| `--splits-file` | — | Path to ISLES 2022 5-fold splits JSON |
+| `--output-dir` | — | Output directory for `test_results.json` |
+| `--step-size` | `0.5` | Sliding window step size |
+| `--save-nifti` | flag | Save per-case NIfTI predictions |
+
+---
+
+**`dwi_only_baseline.py` — DWI-only baseline (Exp 5), includes training + evaluation**
+
+Single ResNet-18 U-Net trained on DWI only from scratch. Identical hyperparameters to Exp 3 (no pretraining). Training and test evaluation are run in one script — the best checkpoint is automatically evaluated after training completes.
+
+```bash
+python dwi_only_baseline.py \
+  --isles-dir /path/to/preprocessed_isles_dual_v2 \
+  --isles-raw-dir /path/to/ISLES2022 \
+  --splits-file isles_dual_splits_5fold.json \
+  --output-dir /path/to/dwi_only_baseline \
+  --fold 0 --gpu 0
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--isles-dir` | — | Path to training `.npz` files (no bbox needed) |
+| `--isles-raw-dir` | — | Path to raw ISLES 2022 NIfTI files |
+| `--splits-file` | — | Path to ISLES 2022 5-fold splits JSON |
+| `--output-dir` | — | Output directory |
+| `--fold` | required | Fold number (0–4) |
+| `--gpu` | `0` | GPU index |
+| `--step-size` | `0.5` | Sliding window step size for evaluation |
+| `--save-nifti` | flag | Save NIfTI predictions after evaluation |
+
+---
+
+**`evaluate_dwi_only.py` — Standalone evaluation for DWI-only baseline**
+
+Standalone evaluation script for checkpoints from `dwi_only_baseline.py`. Useful for re-evaluating with a different step size or on a different split without retraining.
+
+```bash
+python evaluate_dwi_only.py \
+  --checkpoint /path/to/dwi_only_baseline/fold_0/best_model.pth \
+  --fold 0 --gpu 0 \
+  --isles-dir /path/to/preprocessed_isles_dual_WITH_BBOX \
+  --isles-raw-dir /path/to/ISLES2022 \
+  --splits-file isles_dual_splits_5fold.json \
+  --output-dir /path/to/dwi_only_baseline_test_results \
+  --step-size 0.75
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--checkpoint` | — | Path to `best_model.pth` (required) |
+| `--fold` | required | Fold number (0–4) |
+| `--gpu` | `0` | GPU index |
+| `--isles-dir` | — | Path to `preprocessed_isles_dual_WITH_BBOX` `.npz` files |
+| `--isles-raw-dir` | — | Path to raw ISLES 2022 NIfTI files |
+| `--splits-file` | — | Path to ISLES 2022 5-fold splits JSON |
+| `--output-dir` | — | Output directory for `test_results.json` |
+| `--step-size` | `0.75` | Sliding window step size |
+| `--save-nifti` | flag | Save NIfTI predictions |
+
+---
+
+**`evaluate_joint_from_scratch.py` — Separate encoders, scratch (Exp 3)**
+
+Evaluation counterpart for `joint_training_from_scratch.py`. Same sliding window + reverse preprocessing pipeline as Exp 1.
+
+```bash
+python evaluate_joint_from_scratch.py \
+  --checkpoint /path/to/fold_0/best_joint_model.pth \
+  --isles-dir /path/to/preprocessed_isles_dual_WITH_BBOX \
+  --isles-raw-dir /path/to/ISLES2022 \
+  --splits-file isles_dual_splits_5fold.json \
+  --output-dir /path/to/results --step-size 0.5
+```
+
+---
+
+**`evaluate_channelwise_from_scratch.py` — Shared encoder (2-channel), scratch (Exp 4)**
+
+Evaluation counterpart for `channelwise_from_scratch.py`. Same pipeline as Exp 2 (reports DWI, ADC, and averaged DSC).
+
+```bash
+python evaluate_channelwise_from_scratch.py \
+  --checkpoint /path/to/fold_0/best_joint_model.pth \
+  --isles-dir /path/to/preprocessed_isles_dual_WITH_BBOX \
+  --isles-raw-dir /path/to/ISLES2022 \
+  --splits-file isles_dual_splits_5fold.json \
+  --output-dir /path/to/results --step-size 0.5
+```
+
+---
+
+### ATLAS 2.0 and UOA Private (ResNet-18)
+
+**`evaluate_all_experiments.py` — All ATLAS/UOA experiments (transfer + scratch)**
+
+Evaluates all ResNet-18 experiments on ATLAS and UOA. Runs sliding window inference on the held-out test split and computes four metrics: DSC, absolute volume difference (voxels), lesion-wise F1 (ATLAS standard: any single-voxel overlap counts as a match), and absolute lesion count difference. Results are saved per-fold and aggregated across folds.
+
+```bash
+# Evaluate all folds, both conditions for ATLAS
+python evaluate_all_experiments.py --dataset ATLAS --gpu 0
+
+# Evaluate all folds, both conditions for UOA
+python evaluate_all_experiments.py --dataset UOA_Private --gpu 0
+
+# Evaluate transfer condition only
+python evaluate_all_experiments.py --dataset ATLAS --condition transfer --gpu 0
+
+# Evaluate specific folds only
+python evaluate_all_experiments.py --dataset ATLAS --folds 0 1 --gpu 0
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--dataset` | required | `ATLAS` or `UOA_Private` |
+| `--condition` | both | `transfer`, `scratch`, or omit for both |
+| `--folds` | 0–4 | Specific fold numbers to evaluate |
+| `--gpu` | `0` | GPU index |
+
+Metrics reported: DSC, absolute volume difference (voxels), lesion-wise F1, lesion count difference.
+
+---
+
+### UCTransNet3D — ATLAS and UOA
+
+**`evaluate_uctransnet3d_stroke.py` — All UCTransNet3D ATLAS/UOA experiments**
+
+Evaluates all UCTransNet3D experiments (transfer + scratch, both datasets, all folds). Computes the same four metrics as the ResNet-18 evaluation: DSC, lesion-wise F1, lesion count difference, and absolute volume difference.
+
+```bash
+python evaluate_uctransnet3d_stroke.py \
+  --exp-dir     /hpc/pahm409/uctransnet3d_stroke_experiments \
+  --data-dir    /hpc/pahm409/harvard/preprocessed_stroke_foundation \
+  --splits-file splits_5fold.json \
+  --output-dir  /hpc/pahm409/uctransnet3d_stroke_test_results \
+  --gpu 0
+```
+
+| Argument | Description |
+|---|---|
+| `--exp-dir` | Root of `finetune_uctransnet3d_stroke.py` outputs (`<dataset>/<transfer\|scratch>/fold_X/`) |
+| `--data-dir` | Root of `preprocessed_stroke_foundation` outputs |
+| `--splits-file` | Path to `splits_5fold.json` |
+| `--output-dir` | Output directory for per-fold and aggregated JSON results |
+| `--gpu` | GPU index |
+
+---
+
 ## Evaluation Metrics
 
 - **ISLES 2022**: Dice Similarity Coefficient (DSC)
