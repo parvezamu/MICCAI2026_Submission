@@ -74,6 +74,49 @@ pip install nibabel numpy torch tqdm
 
 ---
 
+## Repository Structure
+
+---
+
+## Repository Files
+
+**Preprocessing**
+- `preprocess_v2_isles.py`
+- `preprocess_isles_WITH_BBOX.py`
+- `preprocess_brats2024_t2flair.py`
+- `preprocess_stroke_foundation.py`
+- `extract_patches_96x96x96.py`
+
+**Training — ResNet-18**
+- `train_brats_t2flair_supervised_FIXED.py`
+- `joint_training_MINIMAL_FIX.py`
+- `joint_training_SEPARATE_LR.py`
+- `joint_training_from_scratch.py`
+- `channelwise_from_scratch.py`
+- `dwi_only_baseline.py`
+- `train_all_experiments_with_volume_validation.py`
+
+**Training — UCTransNet3D**
+- `train_brats_uctransnet3d.py`
+- `finetune_uctransnet3d_stroke.py`
+
+**Evaluation — ISLES 2022**
+- `evaluate_joint_sliding_window_DEBUG.py`
+- `evaluate_channelwise_sliding_window.py`
+- `evaluate_joint_from_scratch.py`
+- `evaluate_channelwise_from_scratch.py`
+- `evaluate_dwi_only.py`
+
+**Evaluation — ATLAS 2.0 and UOA**
+- `evaluate_all_experiments.py`
+- `evaluate_uctransnet3d_stroke.py`
+
+---
+
+## Data Preprocessing
+
+---
+
 ## Data Preprocessing
 
 ### ISLES 2022
