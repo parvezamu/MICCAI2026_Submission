@@ -715,16 +715,7 @@ Results reported across all 5 folds and, separately, across the 3 matched GroupN
 
 ## Citation
 
-If you find this work useful, please cite:
 
-```bibtex
-@inproceedings{ahmad2026transfer,
-  title={Towards Understanding Transfer Learning and Multimodal Training for Ischemic Stroke Lesion Segmentation: A Systematic Ablation Study},
-  author={Ahmad, Parvez and Chong, Benjamin and Fernandez, Justin and Shim, Vickie and Kasabov, Nikola Kirilov and Stinear, Cathy M. and Byblow, Winston D. and Wang, Alan},
-  booktitle={International Conference on Medical Image Computing and Computer-Assisted Intervention},
-  year={2026}
-}
-```
 
 ---
 
